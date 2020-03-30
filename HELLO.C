@@ -126,29 +126,45 @@ void interrupt new_mouse_int(void)
 	old_int_handlers[MOUSE_IRQ].int_ptr();
 }
 
-void interrupt new_generic_int(void)
-{
-	old_int_handlers[irq].int_ptr();
-}
+#define GENERATE_GENERIC_INT_HANDLER_NAME(N) new_generic_ ## N ## int
+#define GENERATE_GENERIC_INT_HANDLER(N) void interrupt new_generic_ ## N ## _int(void)
+
+GENERATE_GENERIC_INT_HANDLER(0) { old_int_handlers[0].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(1) { old_int_handlers[1].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(2) { old_int_handlers[2].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(3) { old_int_handlers[3].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(4) { old_int_handlers[4].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(5) { old_int_handlers[5].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(6) { old_int_handlers[6].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(7) { old_int_handlers[7].int_ptr(); }
+
+GENERATE_GENERIC_INT_HANDLER(8 )  { old_int_handlers[8 ].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(9 )  { old_int_handlers[9 ].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(10)  { old_int_handlers[10].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(11)  { old_int_handlers[11].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(12)  { old_int_handlers[12].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(13)  { old_int_handlers[13].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(14)  { old_int_handlers[14].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(15)  { old_int_handlers[15].int_ptr(); }
 
 Int_description new_int_handlers[] = {
-	{ NEW_MASTER_OFFSET + 0, 0 },
+	{ NEW_MASTER_OFFSET + 0, GENERATE_GENERIC_INT_HANDLER(0) },
 	{ NEW_MASTER_OFFSET + 1, new_kbd_int },
-	{ NEW_MASTER_OFFSET + 2, 0 },
-	{ NEW_MASTER_OFFSET + 3, 0 },
-	{ NEW_MASTER_OFFSET + 4, 0 },
-	{ NEW_MASTER_OFFSET + 5, 0 },
-	{ NEW_MASTER_OFFSET + 6, 0 },
-	{ NEW_MASTER_OFFSET + 7, 0 },
+	{ NEW_MASTER_OFFSET + 2, GENERATE_GENERIC_INT_HANDLER(2) },
+	{ NEW_MASTER_OFFSET + 3, GENERATE_GENERIC_INT_HANDLER(3) },
+	{ NEW_MASTER_OFFSET + 4, GENERATE_GENERIC_INT_HANDLER(4) },
+	{ NEW_MASTER_OFFSET + 5, GENERATE_GENERIC_INT_HANDLER(5) },
+	{ NEW_MASTER_OFFSET + 6, GENERATE_GENERIC_INT_HANDLER(6) },
+	{ NEW_MASTER_OFFSET + 7, GENERATE_GENERIC_INT_HANDLER(7) },
 	
-	{ NEW_SLAVE_OFFSET + 0, 0 },
-	{ NEW_SLAVE_OFFSET + 1, 0 },
-	{ NEW_SLAVE_OFFSET + 2, 0 },
-	{ NEW_SLAVE_OFFSET + 3, 0 },
+	{ NEW_SLAVE_OFFSET + 0, GENERATE_GENERIC_INT_HANDLER(8) },
+	{ NEW_SLAVE_OFFSET + 1, GENERATE_GENERIC_INT_HANDLER(9) },
+	{ NEW_SLAVE_OFFSET + 2, GENERATE_GENERIC_INT_HANDLER(10) },
+	{ NEW_SLAVE_OFFSET + 3, GENERATE_GENERIC_INT_HANDLER(11) },
 	{ NEW_SLAVE_OFFSET + 4, new_mouse_int },
-	{ NEW_SLAVE_OFFSET + 5, 0 },
-	{ NEW_SLAVE_OFFSET + 6, 0 },
-	{ NEW_SLAVE_OFFSET + 7, 0 },
+	{ NEW_SLAVE_OFFSET + 5, GENERATE_GENERIC_INT_HANDLER(13) },
+	{ NEW_SLAVE_OFFSET + 6, GENERATE_GENERIC_INT_HANDLER(14) },
+	{ NEW_SLAVE_OFFSET + 7, GENERATE_GENERIC_INT_HANDLER(15) },
 }
 
 
@@ -156,19 +172,17 @@ void init(void)
 {
 	int i = 0;
 	
+	// TODO(max): collapse into single loop
 	for (i = 0; i < 8; i++)
 	{
 		old_int_handlers[i].int_num = OLD_MASTER_OFFSET + i;
 		old_int_handlers[i].int_ptr = getvect(OLD_MASTER_OFFSET + i);
 	}
-	
 	for (i = 0; i < 8; i++)
 	{
 		old_int_handlers[i + 8].int_num = OLD_SLAVE_OFFSET + i;
 		old_int_handlers[i + 8].int_ptr = getvect(OLD_SLAVE_OFFSET + i);
 	}
-	
-	
 	
 	setvect(OLD_MASTER_OFFSET + KBD_IRQ, new_kbd_int);
 	setvect(OLD_SLAVE_OFFSET + MOUSE_IRQ - 8, new_mouse_int);
