@@ -8,16 +8,9 @@
 #define PIC1_DATA (PIC1_COMMAND + 1)
 #define PIC2_COMMAND 0xa0
 #define PIC2_DATA (PIC2_COMMAND + 1)
-#define PIC_EOI 0x20
 
-void pic_send_eoi(unsigned char irq)
-{
-	if (irq >= 8)
-	{
-		outp(PIC2_COMMAND, PIC_EOI);
-	}
-	outp(PIC1_COMMAND, PIC_EOI);
-}
+#define PIC_READ_IRR 0x0a
+#define PIC_READ_ISR 0x0b
 
 #define OLD_MASTER_OFFSET 0x8
 #define OLD_SLAVE_OFFSET 0x70
@@ -54,25 +47,7 @@ struct Int_description
 };
 typedef struct Int_description Int_description;
 
-Int_description old_int_handlers[] = {
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-	{ 0, 0 },
-};
+Int_description old_int_handlers[] = {0};
 
 struct VIDEO
 {
@@ -82,96 +57,85 @@ struct VIDEO
 typedef struct VIDEO VIDEO;
 
 #define COLOR_TABLE_SIZE 6
-char color_table[] = 
+unsigned char color_table[] = 
 {
 	0x5e,
-	0x5e,
+	0x3a,
 	0x5a,
-	0x5a,
+	0x3f,
+	0x97,
 	0x58,
-	0x58
 };
 int color_index = 0;
 
-void interrupt new_kbd_int(void)
+void print_binary_byte(int n, int pos, unsigned char attribute)
 {
+	int i = 0;
 	VIDEO far *screen = (VIDEO far *)MK_FP(0xb800, 0);
 	
-	char *msg = "Keyboard interrupt";
-	char *c = msg;
-	int n = 0;
-	
-	while (*c != 0)
+	for (i = 7; i >= 0; i--)
 	{
-		screen[n].symbol = *c++;
-		screen[n].attribute = color_table[color_index % COLOR_TABLE_SIZE];
-		n++;
+		screen[pos + i].symbol = (n % 2) + '0';
+		screen[pos + i].attribute = attribute;
+		n /= 2;
 	}
+}
+
+void print_pic_regs_stat(unsigned char attribute)
+{	
+	// NOTE(max): printing mask registers
+	print_binary_byte(inp(PIC1_DATA), 0, attribute);
+	print_binary_byte(inp(PIC2_DATA), 9, attribute);
+	
+	// NOTE(max): printing IRRs
+	outp(PIC1_COMMAND, PIC_READ_IRR);
+	print_binary_byte(inp(PIC1_COMMAND), 80, attribute);
+	
+	outp(PIC2_COMMAND, PIC_READ_IRR);
+	print_binary_byte(inp(PIC2_COMMAND), 89, attribute);
+	
+	// NOTE(max): printing ISRs
+	outp(PIC1_COMMAND, PIC_READ_ISR);
+	print_binary_byte(inp(PIC1_COMMAND), 160, attribute);
+	
+	outp(PIC2_COMMAND, PIC_READ_ISR);
+	print_binary_byte(inp(PIC2_COMMAND), 169, attribute);
+}
+
+void interrupt new_kbd_int(void)
+{
+	unsigned char attribute = color_table[color_index % COLOR_TABLE_SIZE];
+	print_pic_regs_stat(attribute);
 	color_index++;
 	
 	old_int_handlers[KBD_IRQ].int_ptr();
 }
 
-void interrupt new_mouse_int(void)
-{
-	VIDEO far *screen = (VIDEO far *)MK_FP(0xb800, 0);
-	
-	char *msg = "Mouse Interrupt";
-	char *c = msg;
-	int n = 0;
-	
-	while (*c != 0)
-	{
-		screen[n].symbol = *c++;
-		screen[n].attribute = color_table[color_index % COLOR_TABLE_SIZE];
-		n++;
-	}
-	color_index++;
-	
-	old_int_handlers[MOUSE_IRQ].int_ptr();
-}
-
-void interrupt new_pit_int(void)
-{
-	VIDEO far *screen = (VIDEO far *)MK_FP(0xb800, 0);
-	
-	char *msg = "PIT PIT PIT";
-	char *c = msg;
-	int n = 0;
-	
-	while (*c != 0)
-	{
-		screen[n].symbol = *c++;
-		screen[n].attribute = color_table[0];
-		n++;
-	}
-	
-	old_int_handlers[PIT_IRQ].int_ptr();
-}
-
-#define t(N) \
-	void interrupt new_generic_ ## N ## _int(void) { print_status(); old_int_handlers[N].int_ptr(); }
-
 #define GENERATE_GENERIC_INT_HANDLER_NAME(N) new_generic_ ## N ## _int
-#define GENERATE_GENERIC_INT_HANDLER(N) void interrupt new_generic_ ## N ## _int(void)
 
-GENERATE_GENERIC_INT_HANDLER(0) { old_int_handlers[0].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(1) { old_int_handlers[1].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(2) { old_int_handlers[2].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(3) { old_int_handlers[3].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(4) { old_int_handlers[4].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(5) { old_int_handlers[5].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(6) { old_int_handlers[6].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(7) { old_int_handlers[7].int_ptr(); }
+#define GENERATE_GENERIC_INT_HANDLER(N) \
+	void interrupt new_generic_ ## N ## _int(void) { \
+		print_pic_regs_stat(color_table[color_index % COLOR_TABLE_SIZE]); \
+		old_int_handlers[N].int_ptr(); \
+	}
 
-GENERATE_GENERIC_INT_HANDLER(8 )  { old_int_handlers[8 ].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(9 )  { old_int_handlers[9 ].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(10)  { old_int_handlers[10].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(11)  { old_int_handlers[11].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(12)  { old_int_handlers[12].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(13)  { old_int_handlers[13].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(14)  { old_int_handlers[14].int_ptr(); }
-GENERATE_GENERIC_INT_HANDLER(15)  { old_int_handlers[15].int_ptr(); }
+GENERATE_GENERIC_INT_HANDLER(0)
+GENERATE_GENERIC_INT_HANDLER(1)
+GENERATE_GENERIC_INT_HANDLER(2)
+GENERATE_GENERIC_INT_HANDLER(3)
+GENERATE_GENERIC_INT_HANDLER(4)
+GENERATE_GENERIC_INT_HANDLER(5)
+GENERATE_GENERIC_INT_HANDLER(6)
+GENERATE_GENERIC_INT_HANDLER(7)
+
+GENERATE_GENERIC_INT_HANDLER(8)
+GENERATE_GENERIC_INT_HANDLER(9)
+GENERATE_GENERIC_INT_HANDLER(10)
+GENERATE_GENERIC_INT_HANDLER(11)
+GENERATE_GENERIC_INT_HANDLER(12)
+GENERATE_GENERIC_INT_HANDLER(13)
+GENERATE_GENERIC_INT_HANDLER(14)
+GENERATE_GENERIC_INT_HANDLER(15)
 
 Int_description new_int_handlers[] = {
 	{ NEW_MASTER_OFFSET + 0, GENERATE_GENERIC_INT_HANDLER_NAME(0) },
@@ -187,7 +151,7 @@ Int_description new_int_handlers[] = {
 	{ NEW_SLAVE_OFFSET + 1, GENERATE_GENERIC_INT_HANDLER_NAME(9) },
 	{ NEW_SLAVE_OFFSET + 2, GENERATE_GENERIC_INT_HANDLER_NAME(10) },
 	{ NEW_SLAVE_OFFSET + 3, GENERATE_GENERIC_INT_HANDLER_NAME(11) },
-	{ NEW_SLAVE_OFFSET + 4, new_mouse_int },
+	{ NEW_SLAVE_OFFSET + 4, GENERATE_GENERIC_INT_HANDLER_NAME(12) },
 	{ NEW_SLAVE_OFFSET + 5, GENERATE_GENERIC_INT_HANDLER_NAME(13) },
 	{ NEW_SLAVE_OFFSET + 6, GENERATE_GENERIC_INT_HANDLER_NAME(14) },
 	{ NEW_SLAVE_OFFSET + 7, GENERATE_GENERIC_INT_HANDLER_NAME(15) },
@@ -198,7 +162,6 @@ Int_description new_int_handlers[] = {
 #define ICW1_ICW4 0x01
 #define ICW1_INTERVAL4 0x4
 #define ICW4_8086 0x1
-
 
 void pic_remap(int master_offset, int slave_offset)
 {
@@ -212,20 +175,20 @@ void pic_remap(int master_offset, int slave_offset)
 	slave_mask = inp(PIC2_DATA);
 	
 	// NOTE(max): ICW1
-	outb(PIC1_COMMAND, ICW1_INIT | ICW1_INTERVAL4 | ICW1_ICW4);
-	outb(PIC2_COMMAND, ICW1_INIT | ICW1_INTERVAL4 | ICW1_ICW4);
+	outp(PIC1_COMMAND, ICW1_INIT);
+	outp(PIC2_COMMAND, ICW1_INIT);
 	
 	// NOTE(max): ICW2
-	outb(PIC1_DATA, master_offset);
-	outb(PIC2_DATA, slave_offset);
+	outp(PIC1_DATA, master_offset);
+	outp(PIC2_DATA, slave_offset);
 	
 	// NOTE(max): ICW3
-	outb(PIC1_DATA, 0x4);
-	outb(PIC2_DATA, 0x2);
+	outp(PIC1_DATA, 0x4);
+	outp(PIC2_DATA, 0x2);
 	
 	// NOTE(max): ICW4
-	outb(PIC1_DATA, ICW4_8086);
-	outb(PIC2_DATA, ICW4_8086);
+	outp(PIC1_DATA, ICW4_8086);
+	outp(PIC2_DATA, ICW4_8086);
 	
 	// NOTE(max): restore interrupt mask
 	outp(PIC1_DATA, master_mask);
@@ -235,6 +198,9 @@ void pic_remap(int master_offset, int slave_offset)
 void init(void)
 {
 	int i = 0;
+	
+	_disable();
+	
 	
 	// NOTE(max): save old interrupt handlers into a table
 	for (i = 0; i < 8; i++)
@@ -256,19 +222,17 @@ void init(void)
 	{
 		setvect(NEW_SLAVE_OFFSET + i, new_int_handlers[i + 8].int_ptr);
 	}
-	//setvect(OLD_MASTER_OFFSET + KBD_IRQ, new_kbd_int);
-	//setvect(OLD_SLAVE_OFFSET + MOUSE_IRQ - 8, new_mouse_int);
 	
 	pic_remap(NEW_MASTER_OFFSET, OLD_SLAVE_OFFSET);
+	
+	_enable();
 }
 
 int main(void)
 {	
 	unsigned far *fp = (unsigned far *)MK_FP(_psp, 0x2c);
 	
-	_disable();
 	init();
-	_enable();
 	
 	_dos_freemem(*fp);
 	_dos_keep(0, (_DS - _CS) + (_SP / 16) + 1);
