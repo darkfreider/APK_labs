@@ -112,20 +112,20 @@ void interrupt new_kbd_int(void)
 	old_int_handlers[enum_KBD_IRQ]();
 }
 
-#define GENERATE_GENERIC_INT_HANDLER_TEST(irq_name) \
+#define GENERATE_GENERIC_INT_HANDLER(irq_name) \
 	void interrupt new_generic_##irq_name##_int(void) { \
 		print_pic_regs_stat(color_table[color_index % COLOR_TABLE_SIZE]); \
 		old_int_handlers[enum_##irq_name](); }
 
-IRQ_LIST(GENERATE_GENERIC_INT_HANDLER_TEST)
-#undef GENERATE_GENERIC_INT_HANDLER_TEST
+IRQ_LIST(GENERATE_GENERIC_INT_HANDLER)
+#undef GENERATE_GENERIC_INT_HANDLER
 
-#define GENERATE_GENERIC_INT_HANDLER_NAME_TEST(name) new_generic_##name##_int,
+#define GENERATE_GENERIC_INT_HANDLER_NAME(name) new_generic_##name##_int,
 
 Int_description new_int_handlers[NUMBER_OF_INTERRUPT_HANDLERS] = {
-		IRQ_LIST(GENERATE_GENERIC_INT_HANDLER_NAME_TEST)
+		IRQ_LIST(GENERATE_GENERIC_INT_HANDLER_NAME)
 };
-#undef GENERATE_GENERIC_INT_HANDLER_NAME_TEST
+#undef GENERATE_GENERIC_INT_HANDLER_NAME
 
 
 #define ICW1_INIT 0x10
@@ -206,9 +206,6 @@ int main(void)
 	_dos_keep(0, (_DS - _CS) + (_SP / 16) + 1);
 	return (0);
 }
-
-
-
 
 
 
