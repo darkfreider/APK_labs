@@ -152,17 +152,13 @@ int main(void)
 	//                          so that we can approximate reload counter in channel 2 later
 	outp(PC_SPEAKER_PORT, inp(PC_SPEAKER_PORT) & 0xfd);
 	
-	//outp(PC_SPEAKER_PORT, inp(PC_SPEAKER_PORT) & 0xfc);
-	
 	{
 		uint8_t status_ch_0 = 0;
 		uint8_t status_ch_2 = 0;
 		
-		for (i = 0; i < 5; i++)
+		for (i = 0; i < 3; i++)
 		{
 			_disable();
-		
-			// NOTE(max): 
 			
 			outp(PIT_MODCMD_PORT, PIT_READ_BACK_CMD | PIT_READ_BACK_CH_0 | PIT_READ_BACK_DONT_LATCH_COUNT);
 			status_ch_0 = inp(PIT_CH0_DATA_PORT);
@@ -172,7 +168,6 @@ int main(void)
 			
 			_enable();
 			
-			//printf("cmd: " BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(cmd));
 			printf("\rch_0 status: " BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(status_ch_0));
 			printf("\rch_2 status: " BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(status_ch_2));
 			
@@ -180,6 +175,43 @@ int main(void)
 		}
 	}	
 	
+	
+	{
+		uint16_t max_reload_counter_ch0 = 0;
+		uint16_t max_reload_counter_ch2 = 0;
+		
+		for (i = 0; i < 100; i++)
+		{
+			uint16_t temp_ch0 = 0;
+			uint16_t temp_ch2 = 0;
+			
+			_disable();
+			
+			outp(PIT_MODCMD_PORT, PIT_SEL_CH_0 | PIT_LATCH_COUNT_VAL_CMD);
+			temp_ch0 = inp(PIT_CH0_DATA_PORT);
+			temp_ch0 |= (inp(PIT_CH0_DATA_PORT) << 8);
+			
+			outp(PIT_MODCMD_PORT, PIT_SEL_CH_2 | PIT_LATCH_COUNT_VAL_CMD);
+			temp_ch2 = inp(PIT_CH2_DATA_PORT);
+			temp_ch2 |= (inp(PIT_CH2_DATA_PORT) << 8);
+			
+			_enable();
+			
+			if (temp_ch0 > max_reload_counter_ch0)
+			{
+				max_reload_counter_ch0 = temp_ch0;
+			}
+			if (temp_ch2 > max_reload_counter_ch2)
+			{
+				max_reload_counter_ch2 = temp_ch2;
+			}
+			
+			delay(10);
+		}
+		
+		printf("approximate ch0 reload counter: %u\n", max_reload_counter_ch0);
+		printf("approximate ch2 reload counter: %u\n", max_reload_counter_ch2);
+	}
 	
 	
 	return (0);
