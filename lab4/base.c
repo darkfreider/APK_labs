@@ -213,14 +213,27 @@ int main(void)
 		printf("approximate ch2 reload counter: %u\n", max_reload_counter_ch2);
 	}
 	
-	for (i = 0; i < 3; i++)
 	{
-		int j;
-		for (j = 0; j < 5; j++)
+		uint16_t random_limit = 0;
+		
+		printf("Enter RNG limit: ");
+		scanf("%u", &random_limit);
+		
+		if (random_limit == 0)
 		{
-			printf("%u ", random16() % 11);
+			printf("Random limit can't be 0\n");
+			return (0);
 		}
-		printf("\n");
+		
+		for (i = 0; i < 3; i++)
+		{
+			int j;
+			for (j = 0; j < 5; j++)
+			{
+				printf("%u ", random16() % random_limit);
+			}
+			printf("\n");
+		}	
 	}
 	
 	return (0);
