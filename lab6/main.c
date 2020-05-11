@@ -64,6 +64,13 @@ void pic_send_eoi(unsigned char irq)
 #define VK_RETURN 0x0D
 #define VK_ESC    0x1B
 #define VK_SPACE  0x20
+#define VK_EQUALS '='
+#define VK_PLUS   '+'
+#define VK_MINUS  '-'
+#define VK_UNDERSCORE '_'
+#define VK_SEMMICOLON ';'
+#define VK_COLON      ':'
+#define VK_ASTERIC    '*'
 
 #define MSG_KEYUP   0x01
 #define MSG_KEYDOWN 0x02
@@ -238,6 +245,13 @@ void interrupt new_kbd_handler(void)
 				SECOND_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
 				THIRD_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
 				
+				GENERATE_MESSAGE_FORMATION_CODE(0x2B, '\\')
+				GENERATE_MESSAGE_FORMATION_CODE(0x35, '/')
+				GENERATE_MESSAGE_FORMATION_CODE(0x0C, '-')
+				GENERATE_MESSAGE_FORMATION_CODE(0x0D, '=')
+				GENERATE_MESSAGE_FORMATION_CODE(0x27, ';')
+				GENERATE_MESSAGE_FORMATION_CODE(0x28, '\'')
+				
 				GENERATE_MESSAGE_FORMATION_CODE(0x0e, VK_BACK)
 				GENERATE_MESSAGE_FORMATION_CODE(0x39, VK_SPACE)
 				GENERATE_MESSAGE_FORMATION_CODE(0x1c, VK_RETURN)
@@ -323,6 +337,44 @@ void interrupt new_kbd_handler(void)
 				} break;
 			}
 		} break;
+	}
+	
+	{
+		int index = g_kbd_message_queue_back - 1;
+		if (index < 0)
+			index = KBD_MESSAGE_QUEUE_SIZE - 1;
+		
+		switch (g_kbd_message_queue[index].vk)
+		{
+			case '9':
+			{
+				if (g_shift_down) g_kbd_message_queue[index].vk = '(';
+			} break;
+			case '0':
+			{
+				if (g_shift_down) g_kbd_message_queue[index].vk = ')';
+			} break;
+			case VK_MINUS:
+			{
+				if (g_shift_down) g_kbd_message_queue[index].vk = '_';
+			} break;
+			case VK_EQUALS:
+			{
+				if (g_shift_down) g_kbd_message_queue[index].vk = '+';
+			} break;
+			case '\'':
+			{
+				if (g_shift_down) g_kbd_message_queue[index].vk = '\"';
+			} break;
+			case ';':
+			{
+				if (g_shift_down) g_kbd_message_queue[index].vk = ':';
+			} break;
+			case '8':
+			{
+				if (g_shift_down) g_kbd_message_queue[index].vk = '*';
+			} break;
+		}
 	}
 	
 	/*{
