@@ -68,19 +68,80 @@ void pic_send_eoi(unsigned char irq)
 #define MSG_KEYUP   0x01
 #define MSG_KEYDOWN 0x02
 
-struct Kbd_message
+struct KBD_message
 {
 	uint16_t msg;
 	uint16_t vk;
-	uint16_t meta; // state of shift, ctrl at the time of press or release
+
+	/*
+		(1 << 0) : shift state
+		(2 << 0) : ctrl state
+	*/
+	uint16_t flags; // state of shift, ctrl at the time of press or release
 };
-typedef struct Kbd_message Kbd_message;
+typedef struct KBD_message KBD_message;
 
-Kbd_message kbd_message_queue[512];
-int kbd_message_queue_front = -1;
-int kbd_message_queue_back  = 0;
+#define KBD_MESSAGE_QUEUE_SIZE 1024
+KBD_message g_kbd_message_queue[KBD_MESSAGE_QUEUE_SIZE];
+int g_kbd_message_queue_nitems = 0;
+int g_kbd_message_queue_front = 0;
+int g_kbd_message_queue_back  = 0;
 
+KBD_message get_kbd_message(void)
+{
+	KBD_message result;
+	
+	int spin = 1;
+	while (spin)
+	{
+		_disable();
+		if (g_kbd_message_queue_nitems > 0)
+		{
+			spin = 0;
+		}
+		else
+		{
+			_enable();
+		}
+	}
+	
+	
+	if (g_kbd_message_queue_nitems > 0)
+	{
+		result = g_kbd_message_queue[g_kbd_message_queue_front];
+		
+		g_kbd_message_queue_front++;
+		if (g_kbd_message_queue_front == KBD_MESSAGE_QUEUE_SIZE)
+		{
+			g_kbd_message_queue_front = 0;
+		}
+		g_kbd_message_queue_nitems--;
+	}
+	
+	_enable();
+	
+	return (result);
+}
 
+void put_kbd_message(KBD_message msg)
+{
+	_disable();
+
+	g_kbd_message_queue[g_kbd_message_queue_back++] = msg;
+	if (g_kbd_message_queue_back == KBD_MESSAGE_QUEUE_SIZE)
+	{
+		g_kbd_message_queue_back = 0;
+	}
+
+	g_kbd_message_queue_nitems++;
+	if (g_kbd_message_queue_nitems > KBD_MESSAGE_QUEUE_SIZE)
+	{
+		g_kbd_message_queue_front = g_kbd_message_queue_back; // always start with the latest message if the queue is full
+		g_kbd_message_queue_nitems = KBD_MESSAGE_QUEUE_SIZE;
+	}
+	
+	_enable();
+}
 
 
 enum Kbd_dirver_state
@@ -99,6 +160,53 @@ int g_ctrl_down;
 
 typedef void interrupt (*Interrupt_handler_type)(void);
 Interrupt_handler_type old_kbd_handler;
+
+#define FIRST_ROW_LETTERS_LIST(code) \
+	code( 0x10, 'Q') \
+	code( 0x11, 'W') \
+	code( 0x12, 'E') \
+	code( 0x13, 'R') \
+	code( 0x14, 'T') \
+	code( 0x15, 'Y') \
+	code( 0x16, 'U') \
+	code( 0x17, 'I') \
+	code( 0x18, 'O') \
+	code( 0x19, 'P')
+	
+#define SECOND_ROW_LETTERS_LIST(code) \
+	code( 0x1e, 'A') \
+	code( 0x1f, 'S') \
+	code( 0x20, 'D') \
+	code( 0x21, 'F') \
+	code( 0x22, 'G') \
+	code( 0x23, 'H') \
+	code( 0x24, 'J') \
+	code( 0x25, 'K') \
+	code( 0x26, 'L')
+
+#define THIRD_ROW_LETTERS_LIST(code) \
+	code( 0x2c, 'Z') \
+	code( 0x2d, 'X') \
+	code( 0x2e, 'C') \
+	code( 0x2f, 'V') \
+	code( 0x30, 'B') \
+	code( 0x31, 'N') \
+	code( 0x32, 'M')
+
+#define GENERATE_MESSAGE_FORMATION_CODE(__scane_code, __letter)                               \
+						case (__scane_code):                                                  \
+						case ((__scane_code) +  0x80): {                                      \
+						KBD_message msg;                                                      \
+						msg.msg = ((scan_code) & 0x80) ? MSG_KEYUP : MSG_KEYDOWN;             \
+						msg.vk = (__letter);                                                  \
+						msg.flags = (g_shift_down) ? (msg.flags | 0x01) : (msg.flags & 0xfe); \
+						msg.flags = (g_ctrl_down)  ? (msg.flags | 0x02) : (msg.flags & 0xfd); \
+						g_kbd_driver_state = KBD_DRIVER_STATE_DEFAULT;                        \
+						put_kbd_message(msg); } break;
+
+						
+
+
 
 void interrupt new_kbd_handler(void)
 {
@@ -123,42 +231,68 @@ void interrupt new_kbd_handler(void)
 				case 0x09: // ...
 				case 0x0a: // 9
 				case 0x0b: // 0
+				
+				case 0x02 + 0x80: // 1
+				case 0x03 + 0x80: // ...
+				case 0x04 + 0x80: // ...
+				case 0x05 + 0x80: // ...
+				case 0x06 + 0x80: // ...
+				case 0x07 + 0x80: // ...
+				case 0x08 + 0x80: // ...
+				case 0x09 + 0x80: // ...
+				case 0x0a + 0x80: // 9
+				case 0x0b + 0x80: // 0
 				{
-					char code;
+					KBD_message msg;
+					uint16_t vk;
+					
+					msg.msg = (scan_code & 0x80) ? MSG_KEYUP : MSG_KEYDOWN;
 					if (scan_code == 0x0b)
 					{
-						code = '0';
+						vk = '0';
 					}
 					else
 					{
-						code = '0' - 1 + scan_code;
+						vk = scan_code + 0x2e + 1;
 					}
-					ascii_buffer[ascii_buffer_index++] = code;
+					msg.vk = vk;
+					
+					msg.flags = (g_shift_down) ? (msg.flags | 0x01) : (msg.flags & 0xfe);
+					msg.flags = (g_ctrl_down)  ? (msg.flags | 0x02) : (msg.flags & 0xfd);
+					
+					put_kbd_message(msg);
+					
 				} break;
 				
+				/*
+					{
+						KBD_message msg;
+						
+						msg.msg = (scan_code & 0x80) ? MSG_KEYUP : MSG_KEYDOWN;
+						msg.vk = XXXXX;
+						
+						msg.flags = (g_shift_down) ? (msg.flags | 0x01) : (msg.flags & 0xfe);
+						msg.flags = (g_ctrl_down)  ? (msg.flags | 0x02) : (msg.flags & 0xfd);
+						
+						put_kbd_message(msg);
+					}
+				*/
 				
-				// first row of letters
-				case 0x10: { ascii_buffer[ascii_buffer_index++] = 'Q'; } break;
-				case 0x11: { ascii_buffer[ascii_buffer_index++] = 'W'; } break;
-				case 0x12: { ascii_buffer[ascii_buffer_index++] = 'E'; } break;
-				case 0x13: { ascii_buffer[ascii_buffer_index++] = 'R'; } break;
-				case 0x14: { ascii_buffer[ascii_buffer_index++] = 'T'; } break;
-				case 0x15: { ascii_buffer[ascii_buffer_index++] = 'Y'; } break;
-				case 0x16: { ascii_buffer[ascii_buffer_index++] = 'U'; } break;
-				case 0x17: { ascii_buffer[ascii_buffer_index++] = 'I'; } break;
-				case 0x18: { ascii_buffer[ascii_buffer_index++] = 'O'; } break;
-				case 0x19: { ascii_buffer[ascii_buffer_index++] = 'P'; } break;
+				
+				// first row of letters		
+				FIRST_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
 				
 				// second row of letters
-				case 0x1e: { ascii_buffer[ascii_buffer_index++] = 'A'; } break;
-				case 0x1f: { ascii_buffer[ascii_buffer_index++] = 'S'; } break;
-				case 0x20: { ascii_buffer[ascii_buffer_index++] = 'D'; } break;
-				case 0x21: { ascii_buffer[ascii_buffer_index++] = 'F'; } break;
-				case 0x22: { ascii_buffer[ascii_buffer_index++] = 'G'; } break;
-				case 0x23: { ascii_buffer[ascii_buffer_index++] = 'H'; } break;
-				case 0x24: { ascii_buffer[ascii_buffer_index++] = 'J'; } break;
-				case 0x25: { ascii_buffer[ascii_buffer_index++] = 'K'; } break;
-				case 0x26: { ascii_buffer[ascii_buffer_index++] = 'L'; } break;
+				SECOND_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
+				
+				// third row of letters
+				THIRD_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
+				
+				GENERATE_MESSAGE_FORMATION_CODE(0x0e, VK_BACK)
+				GENERATE_MESSAGE_FORMATION_CODE(0x39, VK_SPACE)
+				GENERATE_MESSAGE_FORMATION_CODE(0x1c, VK_RETURN)
+				GENERATE_MESSAGE_FORMATION_CODE(0x01, VK_ESC)
+				GENERATE_MESSAGE_FORMATION_CODE(0x0f, VK_TAB)
 				
 				case 0x2a:        // left shift
 				case 0x36:        // right shift
@@ -173,11 +307,6 @@ void interrupt new_kbd_handler(void)
 					g_kbd_driver_state = KBD_DRIVER_STATE_DEFAULT;
 				} break;
 				
-				case 0x1C: // enter
-				{
-					ascii_buffer[ascii_buffer_index++] = '\n';
-					g_kbd_driver_state = KBD_DRIVER_STATE_DEFAULT;
-				} break;
 				
 				case 0x1d:        // left control
 				case 0x1d + 0x80: // left control up
@@ -188,15 +317,6 @@ void interrupt new_kbd_handler(void)
 						g_ctrl_down = 0;
 					}
 					g_kbd_driver_state = KBD_DRIVER_STATE_DEFAULT;
-				} break;
-				
-				case 0x0E: // backspace
-				case 0x0E + 0x80: // backspace up
-				{
-					if (scan_code & 0x80 == 0)
-					{
-						ascii_buffer[ascii_buffer_index++] = '\b';
-					}		
 				} break;
 				
 				case 0xe0: // break code
@@ -268,8 +388,7 @@ void interrupt new_kbd_handler(void)
 
 int main(void)
 {
-	//int n = 10;
-	int index = 0;
+	int running = 1;
 	
 	console_set_text_color(BLACK, GREY);
 	console_cls();
@@ -278,47 +397,40 @@ int main(void)
 	old_kbd_handler = getvect(PIC_MASTER_OFFSET + 1);
 	setvect(PIC_MASTER_OFFSET + 1, new_kbd_handler);
 	
-	for(;;)
+	while (running)
 	{
-		uint8_t c;
-		int shift;
-		int ctrl;
+		KBD_message msg;
 		
-		_disable();
-		
-		shift = g_shift_down;
-		ctrl = g_ctrl_down;
-		c = ascii_buffer[index];
-		if (c != 0)
+		msg = get_kbd_message();
+		switch (msg.msg)
 		{
-			index++;
+			case MSG_KEYDOWN:
+			{
+				if (isprint(msg.vk))
+				{
+					char c = (msg.flags & 0x01) ? msg.vk : tolower(msg.vk);
+					put_char(c);
+				}
+				else if (msg.vk == VK_BACK)
+				{
+					put_char('\b');
+					console_place_byte(' ');
+				}
+				else if (msg.vk == VK_TAB)
+				{
+					put_char('\t');
+				}
+				else if (msg.vk == VK_RETURN)
+				{
+					put_char('\n');
+					put_char('\r');
+				}
+				else if (msg.vk == VK_ESC)
+				{
+					running = 0;
+				}
+			} break;
 		}
-		
-		_enable();
-		
-		if (c != 0)
-		{
-			c = !shift ? tolower(c) : c;
-			if (ctrl)
-			{
-				console_set_text_color(BLUE, GREY);
-			}
-			else
-			{
-				console_set_text_color(BLACK, GREY);
-			}
-			put_char(c);
-			if (c == '\n')
-			{
-				put_char('\r');
-			}
-			if (c == '\b')
-			{
-				console_place_byte(' ');
-			}
-		}
-		
-		//delay(2000);
 	}
 	
 	setvect(PIC_MASTER_OFFSET + 1, old_kbd_handler);

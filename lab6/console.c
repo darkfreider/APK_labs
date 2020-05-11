@@ -92,6 +92,10 @@ void put_char(uint8_t c)
 	{
 		g_cursor_x = 0;
 	}
+	else if (c == '\t')
+	{
+		g_cursor_x = (g_cursor_x + 8) & ~(8 - 1);
+	}
 	else if (c == '\n')
 	{
 		g_cursor_y++;
