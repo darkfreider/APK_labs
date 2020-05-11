@@ -161,6 +161,18 @@ int g_ctrl_down;
 typedef void interrupt (*Interrupt_handler_type)(void);
 Interrupt_handler_type old_kbd_handler;
 
+#define NUMBERS_LIST(code) \
+	code( 0x02, '1') \
+	code( 0x03, '2') \
+	code( 0x04, '3') \
+	code( 0x05, '4') \
+	code( 0x06, '5') \
+	code( 0x07, '6') \
+	code( 0x08, '7') \
+	code( 0x09, '8') \
+	code( 0x0a, '9') \
+	code( 0x0b, '0')
+
 #define FIRST_ROW_LETTERS_LIST(code) \
 	code( 0x10, 'Q') \
 	code( 0x11, 'W') \
@@ -221,71 +233,9 @@ void interrupt new_kbd_handler(void)
 		{
 			switch (scan_code)
 			{
-				case 0x02: // 1
-				case 0x03: // ...
-				case 0x04: // ...
-				case 0x05: // ...
-				case 0x06: // ...
-				case 0x07: // ...
-				case 0x08: // ...
-				case 0x09: // ...
-				case 0x0a: // 9
-				case 0x0b: // 0
-				
-				case 0x02 + 0x80: // 1
-				case 0x03 + 0x80: // ...
-				case 0x04 + 0x80: // ...
-				case 0x05 + 0x80: // ...
-				case 0x06 + 0x80: // ...
-				case 0x07 + 0x80: // ...
-				case 0x08 + 0x80: // ...
-				case 0x09 + 0x80: // ...
-				case 0x0a + 0x80: // 9
-				case 0x0b + 0x80: // 0
-				{
-					KBD_message msg;
-					uint16_t vk;
-					
-					msg.msg = (scan_code & 0x80) ? MSG_KEYUP : MSG_KEYDOWN;
-					if (scan_code == 0x0b)
-					{
-						vk = '0';
-					}
-					else
-					{
-						vk = scan_code + 0x2e + 1;
-					}
-					msg.vk = vk;
-					
-					msg.flags = (g_shift_down) ? (msg.flags | 0x01) : (msg.flags & 0xfe);
-					msg.flags = (g_ctrl_down)  ? (msg.flags | 0x02) : (msg.flags & 0xfd);
-					
-					put_kbd_message(msg);
-					
-				} break;
-				
-				/*
-					{
-						KBD_message msg;
-						
-						msg.msg = (scan_code & 0x80) ? MSG_KEYUP : MSG_KEYDOWN;
-						msg.vk = XXXXX;
-						
-						msg.flags = (g_shift_down) ? (msg.flags | 0x01) : (msg.flags & 0xfe);
-						msg.flags = (g_ctrl_down)  ? (msg.flags | 0x02) : (msg.flags & 0xfd);
-						
-						put_kbd_message(msg);
-					}
-				*/
-				
-				
-				// first row of letters		
+				NUMBERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
 				FIRST_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
-				
-				// second row of letters
 				SECOND_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
-				
-				// third row of letters
 				THIRD_ROW_LETTERS_LIST(GENERATE_MESSAGE_FORMATION_CODE)
 				
 				GENERATE_MESSAGE_FORMATION_CODE(0x0e, VK_BACK)
