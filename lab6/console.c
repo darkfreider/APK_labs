@@ -99,6 +99,7 @@ void put_char(uint8_t c)
 	else if (c == '\n')
 	{
 		g_cursor_y++;
+		g_cursor_x = 0;
 	}
 	else if (c == '\b')
 	{
